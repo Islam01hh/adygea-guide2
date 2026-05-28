@@ -1,0 +1,10 @@
+{
+  "builds": [
+    { "src": "api/ai-guide.js", "use": "@vercel/node" },
+    { "src": "package.json", "use": "@vercel/static-build", "config": { "distDir": "dist" } }
+  ],
+  "routes": [
+    { "src": "/api/ai-guide", "dest": "/api/ai-guide.js" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}
