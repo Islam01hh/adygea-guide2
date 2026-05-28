@@ -430,14 +430,14 @@ export default function App() {
   const handleAddNewReview = async (rating: number, text: string) => {
     if (!selectedSight || !currentUser) return;
 
-    const newReview: Review = {
+    const newReview = {
       sightId: selectedSight.id,
       userId: currentUser.uid,
       userName: currentUser.displayName,
       userAvatar: currentUser.photoURL,
       rating,
       text,
-      createdAt: new Date().toISOString()
+      createdAt: serverTimestamp()
     };
 
     const path = "reviews";
@@ -480,9 +480,13 @@ export default function App() {
       ...payload,
       createdAt: new Date().toISOString()
     };
+    const freshForFirestore = {
+      ...payload,
+      createdAt: serverTimestamp()
+    };
     const path = `sights/${payload.id}`;
     try {
-      await setDoc(doc(db, "sights", payload.id), fresh);
+      await setDoc(doc(db, "sights", payload.id), freshForFirestore);
       setSights(prev => [...prev, fresh]);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, path);
@@ -494,9 +498,13 @@ export default function App() {
       ...payload,
       createdAt: new Date().toISOString()
     };
+    const freshForFirestore = {
+      ...payload,
+      createdAt: serverTimestamp()
+    };
     const path = `routes/${payload.id}`;
     try {
-      await setDoc(doc(db, "routes", payload.id), fresh);
+      await setDoc(doc(db, "routes", payload.id), freshForFirestore);
       setRoutes(prev => [...prev, fresh]);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, path);
