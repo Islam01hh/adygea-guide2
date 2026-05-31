@@ -13,24 +13,29 @@ const PORT = 3000;
 // JSON parser
 app.use(express.json());
 
-// Initialize Gemini Client safely
-const initGemini = () => {
+// Initialize Gemini Client safely and lazily (allows dynamic API key updates)
+let cachedAiClient: GoogleGenAI | null = null;
+let cachedKey: string | undefined = undefined;
+
+const getGeminiClient = () => {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.warn("WARNING: GEMINI_API_KEY variable is missing. AI Guide won't work correctly until configured in Settings > Secrets.");
+  if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
+    console.warn("WARNING: GEMINI_API_KEY variable is missing or placeholder. AI Guide won't work correctly until configured in Settings > Secrets.");
     return null;
   }
-  return new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
+  if (!cachedAiClient || cachedKey !== apiKey) {
+    cachedKey = apiKey;
+    cachedAiClient = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
       }
-    }
-  });
+    });
+  }
+  return cachedAiClient;
 };
-
-const ai = initGemini();
 
 // --- API ROUTES FIRST ---
 
@@ -52,9 +57,10 @@ app.post("/api/ai-guide", async (req, res) => {
       return res.status(400).json({ error: "Message is required" });
     }
 
+    const ai = getGeminiClient();
     if (!ai) {
       return res.status(503).json({ 
-        error: "AI Guide is currently offline. Please configure your GEMINI_API_KEY in Settings > Secrets." 
+        error: "ИИ-путеводитель временно офлайн. Пожалуйста, добавьте ваш ключ GEMINI_API_KEY в панели Settings > Secrets (Настройки > Секреты) в AI Studio." 
       });
     }
 

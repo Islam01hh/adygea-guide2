@@ -50,7 +50,7 @@ export default function Contacts({ onSubmitFeedback }: ContactsProps) {
           </h2>
         </div>
         <p className="text-slate-500 text-xs md:text-sm mt-1">
-          Туристско-информационный центр Республики Адыгея всегда рад помочь гостям и выслушать рационализаторские идеи
+          Администрация интерактивного путеводителя «Адыгея Гид» всегда рада помочь гостям и выслушать Ваши предложения
         </p>
       </div>
 
@@ -59,7 +59,7 @@ export default function Contacts({ onSubmitFeedback }: ContactsProps) {
         <div className="space-y-4">
           <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-4.5">
             <h3 className="font-display font-bold text-slate-800 text-sm md:text-base">
-              📍 Контактный узел ТИЦ Адыгеи
+              📍 Контакты администрации
             </h3>
             
             <div className="space-y-3 text-xs text-slate-650">
@@ -67,15 +67,15 @@ export default function Contacts({ onSubmitFeedback }: ContactsProps) {
                 <MapPin className="w-4.5 h-4.5 text-teal-600 shrink-0" />
                 <div className="space-y-0.5">
                   <span className="font-bold text-slate-800">Почтовый адрес администрации</span>
-                  <p className="font-light">385000, Республика Адыгея, г. Майкоп, ул. Краснооктябрьская, д. 21</p>
+                  <p className="font-light">Республика Адыгея, г. Майкоп, ул. 2-я крестьянская, д. 12</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-3">
                 <Phone className="w-4.5 h-4.5 text-teal-600 shrink-0" />
                 <div className="space-y-0.5">
-                  <span className="font-bold text-slate-800">Телефон ТИЦ РА (Справочная)</span>
-                  <p className="font-light font-mono">+7 (877) 252-11-22</p>
+                  <span className="font-bold text-slate-800">Телефон (Справочная)</span>
+                  <p className="font-light font-mono">+79962527605</p>
                   <span className="text-[10px] text-slate-400 font-light block">Режим работы: пн-пт с 09:00 до 18:00</span>
                 </div>
               </div>
@@ -84,7 +84,7 @@ export default function Contacts({ onSubmitFeedback }: ContactsProps) {
                 <Mail className="w-4.5 h-4.5 text-teal-600 shrink-0" />
                 <div className="space-y-0.5">
                   <span className="font-bold text-slate-800">Электронная почта</span>
-                  <a href="mailto:info@adygea-gid.ru" className="font-light text-teal-600 hover:underline font-mono">info@adygea-gid.ru</a>
+                  <a href="mailto:khabemizov@gmail.com" className="font-light text-teal-600 hover:underline font-mono">khabemizov@gmail.com</a>
                 </div>
               </div>
             </div>

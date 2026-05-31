@@ -34,6 +34,7 @@ import EventsList from "./components/EventsList";
 import UsefulInfo from "./components/UsefulInfo";
 import Contacts from "./components/Contacts";
 import ProfilePanel from "./components/ProfilePanel";
+import DiplomaThesis from "./components/DiplomaThesis";
 
 // Icons
 import { 
@@ -46,6 +47,7 @@ import {
   ShieldAlert, 
   Heart, 
   Feather, 
+  ArrowLeft,
   ArrowRight, 
   Navigation,
   FileText,
@@ -100,6 +102,110 @@ const defaultReviews: Review[] = [
   }
 ];
 
+// Beautifully parsers markdown block descriptions, creating proper paragraph margins, spacing, lists and headers
+const renderFormattedMarkdown = (text: string) => {
+  if (!text) return null;
+
+  const cleanText = text.replace(/\r\n/g, "\n");
+  const blocks = cleanText.split(/\n\s*\n/);
+
+  return (
+    <div className="space-y-4 text-slate-705 leading-relaxed text-sm md:text-[14.5px] font-light">
+      {blocks.map((block, idx) => {
+        const trimmed = block.trim();
+        if (!trimmed) return null;
+
+        // Cover H4 headers (e.g. #### Title)
+        if (trimmed.startsWith("####")) {
+          const headerText = trimmed.replace(/^####\s*/, "");
+          return (
+            <h5 key={idx} className="font-display font-bold text-teal-700 text-xs md:text-sm uppercase tracking-wider pt-3 flex items-center gap-1.5 mt-4">
+              <span className="w-1 h-3 bg-teal-500 rounded-full"></span>
+              {headerText}
+            </h5>
+          );
+        }
+
+        // Cover H3 headers (e.g. ### Title)
+        if (trimmed.startsWith("###")) {
+          const headerText = trimmed.replace(/^###\s*/, "");
+          return (
+            <h4 key={idx} className="font-display font-black text-slate-800 text-sm md:text-[15.5px] tracking-tight pt-3.5 pb-1 border-b border-slate-100 flex items-center gap-2 mt-5">
+              <span className="w-1.5 h-4 bg-teal-600 rounded-sm"></span>
+              {headerText}
+            </h4>
+          );
+        }
+
+        // Cover bullet lists (* or -)
+        if (trimmed.startsWith("*") || trimmed.startsWith("-")) {
+          const lines = trimmed.split("\n").filter(l => l.trim().length > 0);
+          return (
+            <ul key={idx} className="space-y-2.5 my-3 pl-5 list-disc list-outside text-slate-600 text-xs md:text-sm">
+              {lines.map((line, lIdx) => {
+                const lineContent = line.replace(/^[\*\-]\s*/, "");
+                return (
+                  <li key={lIdx} className="leading-relaxed pl-1">
+                    {parseInlineBold(lineContent)}
+                  </li>
+                );
+              })}
+            </ul>
+          );
+        }
+
+        // Cover numbered lists (e.g. 1. 2.)
+        if (/^\d+\./.test(trimmed)) {
+          const lines = trimmed.split("\n").filter(l => l.trim().length > 0);
+          return (
+            <ol key={idx} className="space-y-2.5 my-3 pl-5 list-decimal list-outside text-slate-600 text-xs md:text-sm">
+              {lines.map((line, lIdx) => {
+                const lineContent = line.replace(/^\d+\.\s*/, "");
+                return (
+                  <li key={lIdx} className="leading-relaxed pl-1">
+                    {parseInlineBold(lineContent)}
+                  </li>
+                );
+              })}
+            </ol>
+          );
+        }
+
+        // Cover bold header lines
+        if (trimmed.startsWith("**") && trimmed.endsWith("**")) {
+          const cleanLine = trimmed.replace(/\*\*/g, "");
+          return (
+            <p key={idx} className="text-slate-900 font-extrabold text-xs md:text-sm uppercase tracking-wide pt-1 mt-2">
+              {cleanLine}
+            </p>
+          );
+        }
+
+        // Normal paragraph block with inline bold formatting
+        return (
+          <p key={idx} className="leading-relaxed text-slate-600 font-light text-justify text-xs md:text-sm mb-2 pb-0.5">
+            {parseInlineBold(trimmed)}
+          </p>
+        );
+      })}
+    </div>
+  );
+};
+
+const parseInlineBold = (text: string) => {
+  const parts = text.split(/\*\*([^*]+)\*\*/g);
+  return parts.map((part, index) => {
+    if (index % 2 === 1) {
+      return (
+        <strong key={index} className="font-bold text-slate-950">
+          {part}
+        </strong>
+      );
+    }
+    return part;
+  });
+};
+
 export default function App() {
   // Database states
   const [sights, setSights] = useState<Sight[]>([]);
@@ -111,7 +217,7 @@ export default function App() {
   // Selection / Navigation states
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedSight, setSelectedSight] = useState<Sight | null>(null);
-  const [activeTab, setActiveTab] = useState<"catalog" | "routes" | "admin" | "map" | "cuisine" | "weather" | "events" | "info" | "contacts" | "profile">("catalog");
+  const [activeTab, setActiveTab] = useState<"catalog" | "routes" | "admin" | "map" | "cuisine" | "weather" | "events" | "info" | "contacts" | "profile" | "diploma">("catalog");
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
 
   // Authentication states
@@ -128,6 +234,11 @@ export default function App() {
 
   // Demo Simulated Offline states & bootstrap options
   const [isDemoAdminMode, setIsDemoAdminMode] = useState(false);
+  const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
+  const [adminUsername, setAdminUsername] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   // Avatars list to choose from on registration
   const AVATARS = [
@@ -413,16 +524,29 @@ export default function App() {
       setIsDemoAdminMode(false);
       setCurrentUser(null);
     } else {
+      setIsAdminLoginOpen(true);
+    }
+  };
+
+  const handleAdminLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminLoginError(null);
+    if ((adminUsername.trim() === "admin" || adminUsername.trim() === "khabemizov@gmail.com") && adminPassword === "adygeagid2026") {
       setIsDemoAdminMode(true);
       setCurrentUser({
         uid: "demo_admin_uid",
-        displayName: "Асланбий Х. (Админ-Демо)",
-        email: "Khabemizov@gmail.com",
+        displayName: "Асланбий Х. (Админ)",
+        email: "khabemizov@gmail.com",
         photoURL: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100",
         role: "admin",
         createdAt: new Date().toISOString()
       });
+      setIsAdminLoginOpen(false);
+      setAdminUsername("");
+      setAdminPassword("");
       setActiveTab("admin");
+    } else {
+      setAdminLoginError("Неверный логин или пароль администратора!");
     }
   };
 
@@ -430,14 +554,14 @@ export default function App() {
   const handleAddNewReview = async (rating: number, text: string) => {
     if (!selectedSight || !currentUser) return;
 
-    const newReview = {
+    const newReview: Review = {
       sightId: selectedSight.id,
       userId: currentUser.uid,
       userName: currentUser.displayName,
       userAvatar: currentUser.photoURL,
       rating,
       text,
-      createdAt: serverTimestamp()
+      createdAt: new Date().toISOString()
     };
 
     const path = "reviews";
@@ -480,13 +604,9 @@ export default function App() {
       ...payload,
       createdAt: new Date().toISOString()
     };
-    const freshForFirestore = {
-      ...payload,
-      createdAt: serverTimestamp()
-    };
     const path = `sights/${payload.id}`;
     try {
-      await setDoc(doc(db, "sights", payload.id), freshForFirestore);
+      await setDoc(doc(db, "sights", payload.id), fresh);
       setSights(prev => [...prev, fresh]);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, path);
@@ -498,13 +618,9 @@ export default function App() {
       ...payload,
       createdAt: new Date().toISOString()
     };
-    const freshForFirestore = {
-      ...payload,
-      createdAt: serverTimestamp()
-    };
     const path = `routes/${payload.id}`;
     try {
-      await setDoc(doc(db, "routes", payload.id), freshForFirestore);
+      await setDoc(doc(db, "routes", payload.id), fresh);
       setRoutes(prev => [...prev, fresh]);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, path);
@@ -676,7 +792,7 @@ export default function App() {
             { id: "weather", label: "🌦️ Прогноз погоды" },
             { id: "events", label: "📅 События и Афиша" },
             { id: "info", label: "💡 Полезные советы" },
-            { id: "contacts", label: "📞 Контакты ТИЦ" }
+            { id: "contacts", label: "📞 Контакты" }
           ].map(tab => (
             <button
               key={tab.id}
@@ -759,6 +875,7 @@ export default function App() {
                   const found = sights.find(s => s.title.toLowerCase().includes(keyword.toLowerCase()));
                   if (found) {
                     setSelectedSight(found);
+                    setIsDetailModalOpen(true);
                     const el = document.getElementById(`sight_card_${found.id}`);
                     el?.scrollIntoView({ behavior: "smooth" });
                   }
@@ -838,6 +955,7 @@ export default function App() {
               selectedSight={selectedSight}
               onSelectSight={(sight) => {
                 setSelectedSight(sight);
+                setIsDetailModalOpen(true);
                 // Switch focus to catalog to display detail cards
                 setActiveTab("catalog");
               }}
@@ -876,6 +994,12 @@ export default function App() {
           </div>
         )}
 
+        {activeTab === "diploma" && (
+          <div className="mb-6 animate-fade-in">
+            <DiplomaThesis />
+          </div>
+        )}
+
         {activeTab === "profile" && currentUser && (
           <div className="mb-6 animate-fade-in">
             <ProfilePanel
@@ -885,6 +1009,7 @@ export default function App() {
               onRemoveFavorite={handleToggleFavorite}
               onSelectSight={(sight) => {
                 setSelectedSight(sight);
+                setIsDetailModalOpen(true);
                 setActiveTab("catalog");
               }}
               onLogout={() => {
@@ -938,7 +1063,7 @@ export default function App() {
                     return (
                       <div
                         key={sight.id}
-                        onClick={() => setSelectedSight(sight)}
+                        onClick={() => { setSelectedSight(sight); setIsDetailModalOpen(true); }}
                         className={`bg-white rounded-3xl border text-left cursor-pointer overflow-hidden transition-all duration-300 transform group ${
                           isSelected 
                             ? "ring-2 ring-teal-600 border-teal-50 hover:scale-[1.01]" 
@@ -1007,166 +1132,10 @@ export default function App() {
                   })}
                 </div>
 
-                {/* Sights detailed full documentation reader */}
-                {selectedSight ? (
-                  <div className="bg-white rounded-3xl border border-slate-100 p-6 shadow-xl space-y-6 text-left transition duration-300 animate-fade-in" id="selected_sight_detail_reader">
-                    
-                    {/* Visual Heart toggle and category info bar */}
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="bg-teal-50 text-teal-700 font-mono text-[10px] uppercase font-black tracking-widest px-2.5 py-1 rounded-lg border border-teal-100">
-                          {selectedSight.category}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          ID: {selectedSight.id}
-                        </span>
-                      </div>
-
-                      {/* Heart Toggle Button */}
-                      <button
-                        onClick={() => handleToggleFavorite(selectedSight.id)}
-                        className={`p-2.5 rounded-2xl border transition flex items-center gap-1.5 text-xs font-bold ${
-                          favorites.some(f => f.sightId === selectedSight.id)
-                            ? "bg-red-500 border-red-500 text-white shadow-md hover:bg-red-650"
-                            : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                        }`}
-                        id={`btn_toggle_fav_detail_${selectedSight.id}`}
-                        title={favorites.some(f => f.sightId === selectedSight.id) ? "Убрать из избранного" : "Добавить в избранное"}
-                      >
-                        <Heart className={`w-4 h-4 ${favorites.some(f => f.sightId === selectedSight.id) ? "fill-current" : ""}`} />
-                        <span>{favorites.some(f => f.sightId === selectedSight.id) ? "В избранном" : "В избранное"}</span>
-                      </button>
-                    </div>
-
-                    {/* Image visual hero banner with text overlay */}
-                    <div className="rounded-2xl overflow-hidden shadow-lg h-64 md:h-80 relative group">
-                      <img 
-                        src={selectedSight.image} 
-                        alt={selectedSight.title} 
-                        className="w-full h-full object-cover group-hover:scale-101 transition duration-500"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent flex items-end p-6">
-                        <div className="text-white space-y-1.5 w-full">
-                          <p className="text-xs text-teal-300 flex items-center gap-1 font-semibold">
-                            <MapPin className="w-3.5 h-3.5 text-teal-300" />
-                            <span>{selectedSight.location}</span>
-                          </p>
-                          <h2 className="font-display font-black text-xl md:text-3xl tracking-tight text-white drop-shadow-sm">
-                            {selectedSight.title}
-                          </h2>
-                          <p className="text-[11px] text-slate-300 font-mono">
-                            Координаты: {selectedSight.coordinates.lat.toFixed(5)}° N, {selectedSight.coordinates.lng.toFixed(5)}° E
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* LARGET RATING SCORE BOARD BADGE */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gradient-to-br from-amber-50 to-orange-50/40 p-5 rounded-2xl border border-amber-100/50">
-                      <div className="text-center md:border-r border-amber-200/50 py-1.5 flex flex-col justify-center items-center">
-                        <span className="text-[9px] uppercase font-bold tracking-widest text-slate-400 font-mono block">Крупный рейтинг</span>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-4xl font-extrabold text-slate-800 font-display leading-none">{selectedSight.rating}</span>
-                          <div className="text-left font-mono leading-tight">
-                            <span className="text-[10px] text-slate-400 block">из 5.0</span>
-                            <div className="flex gap-0.5">
-                              {[1, 2, 3, 4, 5].map(st => (
-                                <Star 
-                                  key={st} 
-                                  className={`w-3.5 h-3.5 ${
-                                    st <= Math.round(selectedSight.rating)
-                                      ? "text-amber-500 fill-amber-500" 
-                                      : "text-slate-200"
-                                  }`} 
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="col-span-2 space-y-1 my-auto text-left">
-                        <h4 className="font-bold text-slate-800 text-xs uppercase font-mono tracking-wider">Отзывы путешественников</h4>
-                        <p className="text-slate-600 text-xs font-light leading-relaxed">
-                          Посетители оценивают данное направление на <strong className="text-slate-800 font-semibold">{selectedSight.rating} звезд</strong> на основе <strong className="text-slate-800 font-semibold">{selectedSight.reviewsCount} оставленных рецензий</strong>. Напишите своё мнение ниже!
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Rich description */}
-                    <div className="markdown-body text-slate-700 leading-relaxed text-xs md:text-sm my-4 border-b border-slate-100 pb-5">
-                      {selectedSight.description.split("\n\n").map((chunk, idx) => {
-                        if (chunk.startsWith("###")) {
-                          return <h3 key={idx} className="font-display font-black text-slate-800 text-sm md:text-base tracking-tight mt-4 mb-2">{chunk.replace("### ", "")}</h3>;
-                        }
-                        if (chunk.startsWith("**")) {
-                          return <p key={idx} className="text-slate-800 font-semibold mb-2">{chunk.replace(/\*\*/g, "")}</p>;
-                        }
-                        return <p key={idx} className="mb-2.5 font-light">{chunk}</p>;
-                      })}
-                    </div>
-
-                    {/* LOGISTICS CARD GRID COMPONENT */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Как добраться */}
-                      <div className="bg-slate-50 p-4.5 rounded-2xl border border-slate-100 space-y-2 text-xs">
-                        <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
-                          <Navigation className="w-4 h-4 text-teal-600 shrink-0" />
-                          <span>📍 Как добраться</span>
-                        </h4>
-                        <p className="text-slate-650 leading-relaxed font-light">
-                          {selectedSight.howToGet || "На рейсовом автобусе от автовокзала города Майкоп, либо на личном легковом автомобиле по указателям до соответствующего туристического поста."}
-                        </p>
-                      </div>
-
-                      {/* Лучшее время */}
-                      <div className="bg-slate-50 p-4.5 rounded-2xl border border-slate-100 space-y-2 text-xs">
-                        <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
-                          <Compass className="w-4 h-4 text-teal-600 shrink-0" />
-                          <span>☀️ Лучшее время для посещения</span>
-                        </h4>
-                        <p className="text-slate-650 leading-relaxed font-light">
-                          {selectedSight.bestTime || "Рекомендуется посещение в ясные летние месяцы с июня по конец сентября, либо в зимний снежный сезон активности горных лыж."}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* INTERESTING FACTS BENTO CARD ROW */}
-                    <div className="space-y-3">
-                      <h4 className="font-bold text-slate-800 text-xs uppercase font-mono tracking-wider flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4 text-indigo-500" />
-                        <span>Интересные факты о месте</span>
-                      </h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        {(selectedSight.facts || [
-                          "Это памятник всемирного природного наследия, охраняемый эко-службами.",
-                          "Данное место окутано колоритными старинными легендами адыгского (черкесского) народа.",
-                          "Маршруты обустроены удобными смотровыми беседками и безопасными ограждениями."
-                        ]).map((fact, fIdx) => (
-                          <div key={fIdx} className="bg-indigo-50/25 p-3.5 rounded-2xl border border-indigo-100/20 text-xs space-y-1 hover:bg-white transition duration-200">
-                            <span className="text-[9px] font-mono text-indigo-500 font-bold tracking-wider block">ФАКТ №{fIdx + 1}</span>
-                            <p className="text-slate-650 leading-normal font-light">{fact}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Reviews subcomponent integration */}
-                    <ReviewList
-                      sightId={selectedSight.id}
-                      reviews={reviews}
-                      currentUser={currentUser}
-                      onAddReview={handleAddNewReview}
-                      onDeleteReview={handleDeleteReview}
-                    />
-
-                  </div>
-                ) : (
-                  <div className="bg-white rounded-3xl border border-slate-100 p-8 text-center text-slate-400 text-xs shadow">
-                    Пожалуйста, создайте или выберите достопримечательность для отображения детального описания
-                  </div>
-                )}
+                {/* Sights detailed full documentation reader info helper */}
+                <div className="bg-slate-50 rounded-3xl border border-dashed border-slate-200 p-6 text-center text-slate-500 text-xs shadow-inner mt-4">
+                  ✨ Нажмите на любую достопримечательность в каталоге или на карте, чтобы открыть подробное описание, интересные факты и отзывы во всплывающем окне-лайтбоксе.
+                </div>
 
               </div>
             )}
@@ -1226,23 +1195,8 @@ export default function App() {
                     </div>
 
                     {/* Route markdown details */}
-                    <div className="markdown-body p-1 text-slate-600 text-xs md:text-sm leading-relaxed border-b border-slate-100 pb-6">
-                      {selectedRoute.description.split("\n\n").map((chunk, idx) => {
-                        if (chunk.startsWith("###")) {
-                          return <h3 key={idx} className="font-display font-bold text-slate-800 tracking-tight text-sm md:text-base mt-4">{chunk.replace("### ", "")}</h3>;
-                        }
-                        if (chunk.startsWith("####")) {
-                          return <h4 key={idx} className="font-display font-medium text-teal-700 text-xs md:text-sm uppercase tracking-wide mt-3 mb-1">{chunk.replace("#### ", "")}</h4>;
-                        }
-                        if (chunk.match(/^\d+\./)) {
-                          return (
-                            <div key={idx} className="pl-4 border-l-2 border-teal-500/20 py-1 my-2 text-slate-700">
-                              {chunk}
-                            </div>
-                          );
-                        }
-                        return <p key={idx}>{chunk}</p>;
-                      })}
+                    <div className="p-1 border-b border-slate-100 pb-6">
+                      {renderFormattedMarkdown(selectedRoute.description)}
                     </div>
 
                     {/* Connected sights widget inside Route */}
@@ -1254,8 +1208,9 @@ export default function App() {
                         {sights.filter(s => selectedRoute.sightIds.includes(s.id)).map(sightItem => (
                           <div
                             key={sightItem.id}
-                            onClick={() => {
+                             onClick={() => {
                               setSelectedSight(sightItem);
+                              setIsDetailModalOpen(true);
                               setActiveTab("catalog");
                               setSelectedRoute(null);
                             }}
@@ -1328,6 +1283,7 @@ export default function App() {
               selectedSight={selectedSight}
               onSelectSight={(sight) => {
                 setSelectedSight(sight);
+                setIsDetailModalOpen(true);
                 // Ensure catalog tab is active
                 setSelectedRoute(null);
                 setActiveTab("catalog");
@@ -1489,11 +1445,27 @@ export default function App() {
               <button
                 type="button"
                 onClick={handleGoogleLogin}
-                className="w-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs py-2.5 rounded-xl transition inline-flex items-center justify-center gap-1.5"
+                className="w-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs py-2.5 rounded-xl transition inline-flex items-center justify-center gap-1.5 shadow-sm"
                 id="btn_google_auth"
               >
                 <img src="https://images.unsplash.com/photo-1573804633927-bfcbcd909acd?auto=format&fit=crop&q=80&w=40" className="w-4 h-4 object-cover rounded-full" alt="" />
                 Войти через Google
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthModalOpen(false);
+                  setAuthError(null);
+                  setAuthEmail("");
+                  setAuthPassword("");
+                  setAuthName("");
+                }}
+                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-bold text-xs py-2.5 rounded-xl transition inline-flex items-center justify-center gap-1.5"
+                id="btn_auth_go_back"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Вернуться назад
               </button>
 
               <div className="text-center text-xs text-slate-500 pt-2 border-t border-slate-50">
@@ -1513,6 +1485,271 @@ export default function App() {
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ADMIN LOGIN POPUP MODAL */}
+      {isAdminLoginOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm transition-all duration-300">
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl w-full max-w-md overflow-hidden relative animate-fade-in" id="admin_login_dialog_box">
+            
+            {/* Close button */}
+            <button
+              onClick={() => {
+                setIsAdminLoginOpen(false);
+                setAdminLoginError(null);
+                setAdminUsername("");
+                setAdminPassword("");
+              }}
+              className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition"
+              id="btn_close_admin_login_modal"
+            >
+              <X className="w-4.5 h-4.5" />
+            </button>
+
+            {/* Title Banner */}
+            <div className="bg-slate-900 text-white p-6 pb-8 text-center space-y-1 relative">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 mx-auto border border-amber-500/30 flex items-center justify-center">
+                <ShieldAlert className="w-6 h-6 animate-pulse" />
+              </div>
+              <h3 className="font-display font-black text-lg pt-2">
+                Вход для Администратора
+              </h3>
+              <p className="text-xs text-slate-400 font-light">
+                Авторизуйтесь для управления контентом и отзывами экскурсионной панели
+              </p>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleAdminLoginSubmit} className="p-6 space-y-4">
+              
+              {adminLoginError && (
+                <div className="text-xs text-red-650 bg-red-50 border border-red-100 p-2.5 rounded-xl font-semibold">
+                  ⚠️ {adminLoginError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Имя пользователя или Email</label>
+                <div className="relative">
+                  <User className="absolute left-3 top-2.5 w-4.5 h-4.5 text-slate-400" />
+                  <input
+                    type="text"
+                    required
+                    value={adminUsername}
+                    onChange={(e) => setAdminUsername(e.target.value)}
+                    placeholder="admin или khabemizov@gmail.com"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Пароль</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-2.5 w-4.5 h-4.5 text-slate-400" />
+                  <input
+                    type="password"
+                    required
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    placeholder="Введите пароль администратора"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex flex-col gap-2">
+                <button
+                  type="submit"
+                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm py-2.5 rounded-xl transition shadow-md inline-flex items-center justify-center gap-1.5"
+                  id="btn_admin_login_submit"
+                >
+                  <UserCheck className="w-4 h-4" />
+                  <span>Войти в консоль</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdminLoginOpen(false);
+                    setAdminLoginError(null);
+                    setAdminUsername("");
+                    setAdminPassword("");
+                  }}
+                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-2.5 rounded-xl border border-slate-200 transition inline-flex items-center justify-center gap-1.5"
+                  id="btn_admin_login_go_back"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Вернуться назад
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DETAILED SIGHT LIGHTBOX MODAL */}
+      {isDetailModalOpen && selectedSight && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md transition-all duration-300">
+          <div 
+            className="bg-white rounded-3xl border border-slate-100 shadow-2xl w-full max-w-4xl h-[90vh] md:h-[85vh] flex flex-col overflow-hidden relative animate-fade-in"
+            id="detail_sight_modal_container"
+          >
+            {/* Header Close button */}
+            <div className="absolute top-4 right-4 z-10">
+              <button
+                onClick={() => setIsDetailModalOpen(false)}
+                className="p-2.5 rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur-md transition shadow-lg cursor-pointer flex items-center justify-center"
+                id="btn_close_detail_sight_modal"
+                title="Закрыть"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Modal Content */}
+            <div className="flex-grow overflow-y-auto">
+              
+              {/* Hero Image Section */}
+              <div className="h-64 sm:h-80 md:h-96 relative w-full shrink-0">
+                <img 
+                  src={selectedSight.image} 
+                  alt={selectedSight.title} 
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/10 flex items-end p-6 md:p-8">
+                  <div className="text-white space-y-2 w-full max-w-3xl">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="bg-teal-500/90 text-white font-mono text-[10px] uppercase font-black tracking-widest px-2.5 py-1 rounded-lg">
+                        {selectedSight.category}
+                      </span>
+                      <span className="bg-white/15 text-white/90 font-mono text-[9px] px-2 py-1 rounded-lg flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-teal-300" />
+                        {selectedSight.location}
+                      </span>
+                    </div>
+                    
+                    <h2 className="font-display font-black text-2xl sm:text-3xl md:text-4xl tracking-tight text-white drop-shadow-md leading-tight">
+                      {selectedSight.title}
+                    </h2>
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-300 font-mono">
+                      <span>🎯 Координаты: {selectedSight.coordinates.lat.toFixed(5)}° N, {selectedSight.coordinates.lng.toFixed(5)}° E</span>
+                      <span className="hidden sm:inline">|</span>
+                      <span>★ Рейтинг: {selectedSight.rating} / 5.0</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Body Content */}
+              <div className="p-6 md:p-8 space-y-8 max-w-4xl mx-auto">
+                
+                {/* Favorites button and review metrics scoreboard */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 pb-5">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => handleToggleFavorite(selectedSight.id)}
+                      className={`px-4.5 py-2 rounded-2xl border-2 transition flex items-center gap-2 text-xs font-bold ${
+                        favorites.some(f => f.sightId === selectedSight.id)
+                          ? "bg-red-550 border-red-500 bg-red-500 text-white shadow-md hover:bg-red-600"
+                          : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                      }`}
+                      id={`btn_toggle_fav_modal_${selectedSight.id}`}
+                    >
+                      <Heart className={`w-4 h-4 ${favorites.some(f => f.sightId === selectedSight.id) ? "fill-current" : ""}`} />
+                      <span>{favorites.some(f => f.sightId === selectedSight.id) ? "В избранном" : "В избранное"}</span>
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-3 bg-gradient-to-r from-amber-50 to-orange-50/40 p-3 rounded-2xl border border-amber-100/60 shadow-sm">
+                    <div className="flex items-center gap-1 text-amber-600 bg-white px-2 py-1 rounded-xl border border-amber-100 shadow-xs font-bold text-base">
+                      <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
+                      <span>{selectedSight.rating}</span>
+                    </div>
+                    <div className="text-left font-mono leading-none">
+                      <span className="text-[9px] uppercase font-bold tracking-widest text-slate-400 font-mono block">Крупный рейтинг</span>
+                      <span className="text-[10px] text-slate-500 block mt-1">{reviews.filter(r => r.sightId === selectedSight.id).length} отзывов путешественников</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div className="space-y-4">
+                  <h3 className="font-display font-black text-slate-805 text-lg md:text-xl tracking-tight">
+                    Описание и особенности локации
+                  </h3>
+                  <div>
+                    {renderFormattedMarkdown(selectedSight.description)}
+                  </div>
+                </div>
+
+                {/* Practical how-to and best-time logistics bento cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-2.5">
+                    <h4 className="font-bold text-slate-800 flex items-center gap-1.5 text-xs uppercase font-mono tracking-wider text-teal-700">
+                      <Navigation className="w-4.5 h-4.5 text-teal-600 shrink-0" />
+                      <span>📍 Как добраться</span>
+                    </h4>
+                    <p className="text-slate-600 leading-relaxed text-xs font-light">
+                      {selectedSight.howToGet || "На регулярном пригородном автобусе от автовокзала города Майкоп, либо на легковом автотранспорте по трассе до соответствующего контрольно-пропускного пункта."}
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-2.5">
+                    <h4 className="font-bold text-slate-800 flex items-center gap-1.5 text-xs uppercase font-mono tracking-wider text-teal-700">
+                      <Compass className="w-4.5 h-4.5 text-teal-600 shrink-0" />
+                      <span>☀️ Лучшее время для посещения</span>
+                    </h4>
+                    <p className="text-slate-600 leading-relaxed text-xs font-light">
+                      {selectedSight.bestTime || "Рекомендуется посещение в ясные летние месяцы с июня по конец сентября, либо в зимний снежный сезон активного горнолыжного спорта."}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Interactive Facts list */}
+                <div className="space-y-4">
+                  <h4 className="font-bold text-slate-800 text-xs uppercase font-mono tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2">
+                    <Sparkles className="w-4 h-4 text-indigo-500" />
+                    <span>Интересные исторические факты</span>
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                    {(selectedSight.facts || [
+                      "Является охраняемым памятником всемирного природного наследия ЮНЕСКО.",
+                      "Данное место овеяно древними и колоритными черкесскими (адыгскими) легендами.",
+                      "Туристические тропы оборудованы безопасными мостиками, лестницами и прекрасными обзорными площадками."
+                    ]).map((fact, fIdx) => (
+                      <div key={fIdx} className="bg-indigo-50/20 p-4 rounded-2xl border border-indigo-100/10 text-xs space-y-1.5 hover:bg-slate-50 transition duration-200">
+                        <span className="text-[9px] font-mono text-indigo-500 font-bold tracking-wider block">ФАКТ №{fIdx + 1}</span>
+                        <p className="text-slate-600 leading-normal font-light">{fact}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Reviews list in detailed view */}
+                <div className="border-t border-slate-100 pt-6">
+                  <ReviewList
+                    sightId={selectedSight.id}
+                    reviews={reviews}
+                    currentUser={currentUser}
+                    onAddReview={handleAddNewReview}
+                    onDeleteReview={handleDeleteReview}
+                  />
+                </div>
+
+              </div>
+            </div>
+            
+            {/* Modal Footer placeholder info */}
+            <div className="bg-slate-50 px-6 py-4.5 border-t border-slate-100 text-center text-[10px] text-slate-400 shrink-0 font-mono">
+              Нажмите кнопку «Закрыть» или в углу экрана, чтобы вернуться в каталог достопримечательностей Адыгеи.
+            </div>
+
           </div>
         </div>
       )}
